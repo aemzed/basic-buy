@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,6 +9,12 @@ import { useCart } from "@/contexts/CartContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { Loader2, Package } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+
+interface Region {
+  id: string;
+  name: string;
+}
 
 const Checkout = () => {
   const navigate = useNavigate();
@@ -17,6 +23,8 @@ const Checkout = () => {
 
   const [formData, setFormData] = useState({
     name: user?.name || "",
+    email: "",
+    phone: "",
     address: "",
     province: "",
     city: "",
@@ -26,11 +34,67 @@ const Checkout = () => {
 
   const [shippingCost, setShippingCost] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
+  const [provinces, setProvinces] = useState<Region[]>([]);
+  const [cities, setCities] = useState<Region[]>([]);
+  const [districts, setDistricts] = useState<Region[]>([]);
+
+  useEffect(() => {
+    fetchProvinces();
+  }, []);
+
+  const fetchProvinces = async () => {
+    try {
+      const { data, error } = await supabase.functions.invoke("get-regions", {
+        body: { type: "province" },
+      });
+
+      if (error) throw error;
+      if (data?.success) {
+        setProvinces(data.data);
+      }
+    } catch (error) {
+      console.error("Error fetching provinces:", error);
+      toast.error("Gagal memuat data provinsi");
+    }
+  };
+
+  const fetchCities = async (provinceId: string) => {
+    try {
+      const { data, error } = await supabase.functions.invoke("get-regions", {
+        body: { type: "city", parentId: provinceId },
+      });
+
+      if (error) throw error;
+      if (data?.success) {
+        setCities(data.data);
+        setDistricts([]);
+      }
+    } catch (error) {
+      console.error("Error fetching cities:", error);
+      toast.error("Gagal memuat data kota");
+    }
+  };
+
+  const fetchDistricts = async (cityId: string) => {
+    try {
+      const { data, error } = await supabase.functions.invoke("get-regions", {
+        body: { type: "district", parentId: cityId },
+      });
+
+      if (error) throw error;
+      if (data?.success) {
+        setDistricts(data.data);
+      }
+    } catch (error) {
+      console.error("Error fetching districts:", error);
+      toast.error("Gagal memuat data kecamatan");
+    }
+  };
 
   const couriers = [
-    { value: "jne", label: "JNE" },
-    { value: "tiki", label: "TIKI" },
-    { value: "pos", label: "POS Indonesia" },
+    { value: "JNE", label: "JNE" },
+    { value: "TIKI", label: "TIKI" },
+    { value: "POS", label: "POS Indonesia" },
   ];
 
   const formatPrice = (price: number) => {
@@ -42,35 +106,40 @@ const Checkout = () => {
   };
 
   const calculateShipping = async () => {
-    if (!formData.province || !formData.city || !formData.courier) {
-      toast.error("Lengkapi data pengiriman terlebih dahulu");
+    if (!formData.city || !formData.courier) {
+      toast.error("Pilih kota dan kurir terlebih dahulu");
       return;
     }
 
     setLoading(true);
     try {
-      // Simulasi API call RajaOngkir
-      // Dalam implementasi nyata, ini akan memanggil edge function
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-      
-      // Simulasi biaya ongkir berdasarkan kurir
-      const costs = {
-        jne: 25000,
-        tiki: 28000,
-        pos: 20000,
-      };
-      
-      const cost = costs[formData.courier as keyof typeof costs] || 25000;
-      setShippingCost(cost);
-      toast.success("Ongkos kirim berhasil dihitung");
+      const cityName = cities.find((c) => c.id === formData.city)?.name || "";
+      const totalWeight = cart.reduce((sum, item) => sum + item.quantity * 1000, 0);
+
+      const { data, error } = await supabase.functions.invoke("calculate-shipping", {
+        body: {
+          courier: formData.courier.toUpperCase(),
+          weight: totalWeight,
+          destination: cityName,
+        },
+      });
+
+      if (error) throw error;
+      if (data?.success) {
+        setShippingCost(data.data.cost);
+        toast.success(
+          `Ongkos kirim ${data.data.courier}: ${formatPrice(data.data.cost)} (${data.data.etd})`
+        );
+      }
     } catch (error) {
+      console.error("Error calculating shipping:", error);
       toast.error("Gagal menghitung ongkos kirim");
     } finally {
       setLoading(false);
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!user) {
@@ -84,28 +153,68 @@ const Checkout = () => {
       return;
     }
 
-    // Simpan order (dalam implementasi nyata akan ke database)
-    const order = {
-      id: Date.now().toString(),
-      userId: user.id,
-      items: cart,
-      total: totalPrice + shippingCost,
-      shipping: {
-        ...formData,
-        cost: shippingCost,
-      },
-      status: "pending",
-      createdAt: new Date().toISOString(),
-    };
+    setLoading(true);
+    try {
+      const orderId = `ORD-${Date.now()}`;
+      const totalAmount = totalPrice + shippingCost;
 
-    // Simpan ke localStorage untuk demo
-    const orders = JSON.parse(localStorage.getItem("orders") || "[]");
-    orders.push(order);
-    localStorage.setItem("orders", JSON.stringify(orders));
+      const provinceName = provinces.find((p) => p.id === formData.province)?.name || "";
+      const cityName = cities.find((c) => c.id === formData.city)?.name || "";
+      const districtName = districts.find((d) => d.id === formData.district)?.name || "";
 
-    clearCart();
-    toast.success("Pesanan berhasil dibuat!");
-    navigate("/");
+      // Create payment invoice
+      const { data, error } = await supabase.functions.invoke("create-payment", {
+        body: {
+          orderId,
+          amount: totalAmount,
+          customerName: formData.name,
+          customerEmail: formData.email,
+          items: cart.map((item) => ({
+            name: item.name,
+            quantity: item.quantity,
+            price: item.price,
+          })),
+        },
+      });
+
+      if (error) throw error;
+
+      if (data?.success) {
+        // Simpan order
+        const order = {
+          id: orderId,
+          userId: user.id,
+          items: cart,
+          total: totalAmount,
+          shipping: {
+            ...formData,
+            cost: shippingCost,
+            fullAddress: `${formData.address}, ${districtName}, ${cityName}, ${provinceName}`,
+          },
+          paymentInvoiceId: data.data.id,
+          status: "pending",
+          createdAt: new Date().toISOString(),
+        };
+
+        const orders = JSON.parse(localStorage.getItem("orders") || "[]");
+        orders.push(order);
+        localStorage.setItem("orders", JSON.stringify(orders));
+
+        clearCart();
+        toast.success("Pesanan berhasil dibuat! Mengarahkan ke halaman pembayaran...");
+
+        // Redirect to payment page (mock)
+        setTimeout(() => {
+          window.open(data.data.invoice_url, "_blank");
+          navigate("/");
+        }, 1500);
+      }
+    } catch (error) {
+      console.error("Error creating payment:", error);
+      toast.error("Gagal membuat pesanan. Silakan coba lagi.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   if (cart.length === 0) {
@@ -126,7 +235,7 @@ const Checkout = () => {
               </CardHeader>
               <CardContent>
                 <form onSubmit={handleSubmit} className="space-y-4">
-                  <div className="space-y-2">
+                   <div className="space-y-2">
                     <Label htmlFor="name">Nama Penerima</Label>
                     <Input
                       id="name"
@@ -135,6 +244,31 @@ const Checkout = () => {
                         setFormData({ ...formData, name: e.target.value })
                       }
                       required
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="email">Email</Label>
+                    <Input
+                      id="email"
+                      type="email"
+                      value={formData.email}
+                      onChange={(e) =>
+                        setFormData({ ...formData, email: e.target.value })
+                      }
+                      placeholder="email@example.com"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="phone">Nomor Telepon</Label>
+                    <Input
+                      id="phone"
+                      value={formData.phone}
+                      onChange={(e) =>
+                        setFormData({ ...formData, phone: e.target.value })
+                      }
+                      placeholder="08xxxxxxxxxx"
                     />
                   </div>
 
@@ -153,36 +287,70 @@ const Checkout = () => {
                   <div className="grid md:grid-cols-3 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="province">Provinsi</Label>
-                      <Input
-                        id="province"
+                      <Select
                         value={formData.province}
-                        onChange={(e) =>
-                          setFormData({ ...formData, province: e.target.value })
-                        }
-                        required
-                      />
+                        onValueChange={(value) => {
+                          setFormData({ ...formData, province: value, city: "", district: "" });
+                          setCities([]);
+                          setDistricts([]);
+                          fetchCities(value);
+                        }}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Pilih provinsi" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {provinces.map((province) => (
+                            <SelectItem key={province.id} value={province.id}>
+                              {province.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="city">Kota</Label>
-                      <Input
-                        id="city"
+                      <Label htmlFor="city">Kota/Kabupaten</Label>
+                      <Select
                         value={formData.city}
-                        onChange={(e) =>
-                          setFormData({ ...formData, city: e.target.value })
-                        }
-                        required
-                      />
+                        onValueChange={(value) => {
+                          setFormData({ ...formData, city: value, district: "" });
+                          setDistricts([]);
+                          fetchDistricts(value);
+                        }}
+                        disabled={!formData.province}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Pilih kota" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {cities.map((city) => (
+                            <SelectItem key={city.id} value={city.id}>
+                              {city.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="district">Kecamatan</Label>
-                      <Input
-                        id="district"
+                      <Select
                         value={formData.district}
-                        onChange={(e) =>
-                          setFormData({ ...formData, district: e.target.value })
+                        onValueChange={(value) =>
+                          setFormData({ ...formData, district: value })
                         }
-                        required
-                      />
+                        disabled={!formData.city}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Pilih kecamatan" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {districts.map((district) => (
+                            <SelectItem key={district.id} value={district.id}>
+                              {district.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
                   </div>
 
