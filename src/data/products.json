@@ -1,0 +1,74 @@
+[
+  {
+    "id": "1",
+    "name": "Smartphone Premium X1",
+    "price": 5999000,
+    "image": "/products/phone1.jpg",
+    "description": "Smartphone flagship dengan kamera 108MP dan layar AMOLED 6.7 inch",
+    "category": "Elektronik",
+    "stock": 15
+  },
+  {
+    "id": "2",
+    "name": "Laptop Gaming Pro",
+    "price": 15999000,
+    "image": "/products/laptop1.jpg",
+    "description": "Laptop gaming dengan RTX 4060 dan processor Intel i7 Gen 13",
+    "category": "Elektronik",
+    "stock": 8
+  },
+  {
+    "id": "3",
+    "name": "Wireless Headphone Elite",
+    "price": 1299000,
+    "image": "/products/headphone1.jpg",
+    "description": "Headphone wireless dengan Active Noise Cancellation",
+    "category": "Audio",
+    "stock": 25
+  },
+  {
+    "id": "4",
+    "name": "Smart Watch Series 5",
+    "price": 3499000,
+    "image": "/products/watch1.jpg",
+    "description": "Smart watch dengan health tracking dan GPS built-in",
+    "category": "Wearable",
+    "stock": 20
+  },
+  {
+    "id": "5",
+    "name": "Tablet Pro 12.9",
+    "price": 12999000,
+    "image": "/products/tablet1.jpg",
+    "description": "Tablet premium untuk produktivitas dan kreativitas",
+    "category": "Elektronik",
+    "stock": 12
+  },
+  {
+    "id": "6",
+    "name": "Mechanical Keyboard RGB",
+    "price": 899000,
+    "image": "/products/keyboard1.jpg",
+    "description": "Keyboard mechanical dengan switch premium dan RGB lighting",
+    "category": "Aksesori",
+    "stock": 30
+  },
+  {
+    "id": "7",
+    "name": "Gaming Mouse Pro",
+    "price": 599000,
+    "image": "/products/mouse1.jpg",
+    "description": "Mouse gaming dengan sensor 25600 DPI dan 8 programmable buttons",
+    "category": "Aksesori",
+    "stock": 35
+  },
+  {
+    "id": "8",
+    "name": "4K Monitor Ultra Wide",
+    "price": 8999000,
+    "image": "/products/monitor1.jpg",
+    "description": "Monitor 34 inch ultra wide dengan resolusi 4K dan HDR",
+    "category": "Elektronik",
+    "stock": 10
+  }
+]
